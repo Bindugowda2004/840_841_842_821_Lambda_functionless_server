@@ -9,22 +9,22 @@ class DockerExecutor:
         try:
             # Try different Docker connection methods
             try:
-                # First try Windows named pipe
-                self.client = docker.DockerClient(base_url='npipe:////./pipe/docker_engine')
+                # First try environment-based connection
+                self.client = docker.from_env()
             except:
                 try:
-                    # Then try TCP
-                    self.client = docker.DockerClient(base_url='tcp://localhost:2375')
+                    # Then try Windows named pipe
+                    self.client = docker.DockerClient(base_url='npipe:////./pipe/docker_engine')
                 except:
-                    # Finally try environment-based connection
-                    self.client = docker.from_env()
+                    # Finally try TCP
+                    self.client = docker.DockerClient(base_url='tcp://localhost:2375')
             
             # Test connection
             self.client.ping()
             print("Docker connection successful")
             self._create_base_images()
         except Exception as e:
-            print(f"Docker initialization failed: {e}")
+            print(f"Docker initialization failed: {str(e)}")
             self.client = None
 
     def execute(self, code: str, runtime: str, timeout: float) -> Dict[str, Any]:
@@ -75,7 +75,6 @@ class DockerExecutor:
             with open(filepath, "w") as f:
                 f.write(code_with_print)
             
-            # Run directly without building a new image
             try:
                 start_time = time.time()
                 # Use pre-built images
@@ -85,7 +84,12 @@ class DockerExecutor:
                 container = self.client.containers.run(
                     image_name,
                     command=[runtime, f"/code/{filename}"],
-                    volumes={tmpdir: {"bind": "/code", "mode": "ro"}},
+                    volumes={
+                        os.path.abspath(tmpdir): {
+                            "bind": "/code",
+                            "mode": "ro"
+                        }
+                    },
                     working_dir="/code",
                     detach=True,
                     remove=True
@@ -109,12 +113,17 @@ class DockerExecutor:
                         container.remove(force=True)
                     except:
                         pass
-                    raise e
+                    return {
+                        "status": "error",
+                        "output": f"Container execution failed: {str(e)}",
+                        "exit_code": -1,
+                        "execution_time": time.time() - start_time
+                    }
                     
             except Exception as e:
                 return {
                     "status": "error",
-                    "output": str(e),
+                    "output": f"Docker execution failed: {str(e)}",
                     "exit_code": -1,
                     "execution_time": 0
                 }
@@ -133,4 +142,4 @@ class DockerExecutor:
             self.client.images.pull("node:16-slim")
             print("Node.js image pulled successfully")
         except Exception as e:
-            print(f"Error pulling base images: {e}")
+            print(f"Error pulling base images: {str(e)}")
