@@ -1,4 +1,4 @@
-# Serverless Function Execution Platform
+# lambda Serverless Function Execution Platform
 
 A platform similar to AWS Lambda that enables users to deploy and execute functions on-demand via HTTP requests.
 
